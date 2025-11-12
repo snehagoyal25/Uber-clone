@@ -1,7 +1,9 @@
 const rideModel = require('../models/ride.model');
 const mapService = require('./maps.service');
-const bcrypt = require('bcrypt');
 const crypto = require('crypto');
+const Captain = require('../models/captain.model');        // ✅ added
+const { calculateSurge } = require('../utils/surge.util'); // ✅ added
+
 
 async function getFare(pickup, destination) {
 
@@ -29,8 +31,6 @@ async function getFare(pickup, destination) {
         moto: 1.5
     };
 
-
-
     const fare = {
         auto: Math.round(baseFare.auto + ((distanceTime.distance.value / 1000) * perKmRate.auto) + ((distanceTime.duration.value / 60) * perMinuteRate.auto)),
         car: Math.round(baseFare.car + ((distanceTime.distance.value / 1000) * perKmRate.car) + ((distanceTime.duration.value / 60) * perMinuteRate.car)),
@@ -38,8 +38,6 @@ async function getFare(pickup, destination) {
     };
 
     return fare;
-
-
 }
 
 module.exports.getFare = getFare;
@@ -54,31 +52,41 @@ function getOtp(num) {
 }
 
 
-module.exports.createRide = async ({
-    user, pickup, destination, vehicleType
-}) => {
+// ✅ UPDATED
+module.exports.createRide = async ({ user, pickup, destination, vehicleType }) => {
     if (!user || !pickup || !destination || !vehicleType) {
         throw new Error('All fields are required');
     }
 
-    const fare = await getFare(pickup, destination);
+    // 1) Get base fares
+    const fareObj = await getFare(pickup, destination);
 
+    // 2) Count active drivers
+    const activeDrivers = await Captain.countDocuments({ isAvailable: true });
 
+    // 3) Surge factor
+    const surge = calculateSurge(activeDrivers);
 
-    const ride = rideModel.create({
+    // 4) store original base fare + final fare
+    const baseFare = fareObj[vehicleType];
+    const finalFare = Math.round(baseFare * surge);
+
+    // 5) Create ride
+    const ride = await rideModel.create({
         user,
         pickup,
         destination,
         otp: getOtp(6),
-        fare: fare[ vehicleType ]
-    })
+        baseFare,
+        fare: finalFare,
+        surge
+    });
 
     return ride;
-}
+};
 
-module.exports.confirmRide = async ({
-    rideId, captain
-}) => {
+
+module.exports.confirmRide = async ({ rideId, captain }) => {
     if (!rideId) {
         throw new Error('Ride id is required');
     }
@@ -99,8 +107,8 @@ module.exports.confirmRide = async ({
     }
 
     return ride;
+};
 
-}
 
 module.exports.startRide = async ({ rideId, otp, captain }) => {
     if (!rideId || !otp) {
@@ -130,7 +138,8 @@ module.exports.startRide = async ({ rideId, otp, captain }) => {
     })
 
     return ride;
-}
+};
+
 
 module.exports.endRide = async ({ rideId, captain }) => {
     if (!rideId) {
@@ -157,4 +166,4 @@ module.exports.endRide = async ({ rideId, captain }) => {
     })
 
     return ride;
-}
+};

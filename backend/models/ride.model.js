@@ -1,6 +1,5 @@
 const mongoose = require('mongoose');
 
-
 const rideSchema = new mongoose.Schema({
     user: {
         type: mongoose.Schema.Types.ObjectId,
@@ -19,14 +18,26 @@ const rideSchema = new mongoose.Schema({
         type: String,
         required: true,
     },
+
+    // ✅ added (optional)
+    baseFare: {
+        type: Number,
+    },
+
     fare: {
         type: Number,
         required: true,
     },
 
+    // ✅ added (optional)
+    surge: {
+        type: Number,
+        default: 1,
+    },
+
     status: {
         type: String,
-        enum: [ 'pending', 'accepted', "ongoing", 'completed', 'cancelled' ],
+        enum: ['pending', 'accepted', "ongoing", 'completed', 'cancelled'],
         default: 'pending',
     },
 
@@ -53,6 +64,6 @@ const rideSchema = new mongoose.Schema({
         select: false,
         required: true,
     },
-})
+});
 
 module.exports = mongoose.model('ride', rideSchema);
